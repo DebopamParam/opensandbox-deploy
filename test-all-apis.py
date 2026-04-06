@@ -85,6 +85,24 @@ async def test_commands_api(sandbox: Sandbox):
         assert len(output_captured) > 0
     await safe_test("commands.run (Streaming Handlers)", streaming())
 
+async def test_sessions_api(sandbox: Sandbox):
+    print("\n--- Testing Sessions API ---")
+
+    async def stateful_session():
+        session_id = await sandbox.commands.create_session(working_directory="/workspace")
+        assert session_id is not None
+        
+        # Inject state into the shell session
+        await sandbox.commands.run_in_session(session_id, "export MY_SESSION_VAR=pineapple")
+        
+        # Verify the state persisted across executions
+        res = await sandbox.commands.run_in_session(session_id, "echo $MY_SESSION_VAR")
+        assert "pineapple" in res.text
+        
+        # Cleanup
+        await sandbox.commands.delete_session(session_id)
+        
+    await safe_test("commands.create/run_in/delete_session (Stateful)", stateful_session())
 
 async def test_files_api(sandbox: Sandbox):
     print("\n--- Testing Files API ---")
@@ -130,7 +148,6 @@ async def test_files_api(sandbox: Sandbox):
         await sandbox.files.delete_files([test_file])
     await safe_test("files.delete_files", delete())
 
-
 async def test_sandbox_lifecycle_and_metrics(sandbox: Sandbox):
     print("\n--- Testing Sandbox Core APIs ---")
     
@@ -168,7 +185,6 @@ async def test_sandbox_lifecycle_and_metrics(sandbox: Sandbox):
         assert info.status.state == "Running"
     await safe_test("sandbox.pause & Sandbox.resume", pause_resume())
 
-
 async def test_manager_api():
     print("\n--- Testing Manager API ---")
     
@@ -177,7 +193,6 @@ async def test_manager_api():
             result = await manager.list_sandbox_infos(SandboxFilter(states=["Running", "Paused"]))
             assert len(result.sandbox_infos) > 0
     await safe_test("SandboxManager.list_sandbox_infos", list_sandboxes())
-
 
 # --- Main Execution ---
 async def main():
@@ -195,6 +210,7 @@ async def main():
         print(f"Sandbox created: {sandbox.id}")
 
         await test_commands_api(sandbox)
+        await test_sessions_api(sandbox) # <--- ADDED HERE
         await test_files_api(sandbox)
         await test_sandbox_lifecycle_and_metrics(sandbox)
         await test_manager_api()

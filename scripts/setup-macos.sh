@@ -32,7 +32,7 @@ for CONF_FILE in env.example .env.example .env; do
 done
 
 echo "==> Pulling execd image..."
-docker pull opensandbox/execd:v1.0.6
+docker pull opensandbox/execd:v1.0.10
 
 echo ""
 echo "Done. Next steps:"
