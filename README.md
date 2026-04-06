@@ -60,7 +60,7 @@ test-sandbox.py              # smoke test
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SANDBOX_API_KEY` | `change-me...` | Server auth key |
-| `SANDBOX_IMAGE` | `python:3.11-slim` | Image for sandboxes (local or remote) |
+| `SANDBOX_IMAGE` | `python:3.13-slim` | Image for sandboxes (local or remote) |
 | `SANDBOX_PORT` | `8080` | Server port |
 | `SANDBOX_CPU` | `1` | CPU limit per sandbox |
 | `SANDBOX_MEMORY` | `512Mi` | Memory limit per sandbox |

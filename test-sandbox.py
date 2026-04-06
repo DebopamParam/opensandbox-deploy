@@ -11,7 +11,7 @@ from opensandbox.config import ConnectionConfig
 
 # ── config ────────────────────────────────────────────────────────────────────
 
-IMAGE       = os.environ.get("SANDBOX_IMAGE",   "python:3.11-slim")
+IMAGE       = os.environ.get("SANDBOX_IMAGE",   "python:3.13-slim")
 PORT        = os.environ.get("SANDBOX_PORT",    "8080")
 API_KEY     = os.environ.get("SANDBOX_API_KEY", "change-me-to-something-secret")
 TIMEOUT_S   = int(os.environ.get("SANDBOX_TIMEOUT", "120"))
