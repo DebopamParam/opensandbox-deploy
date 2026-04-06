@@ -1,0 +1,23 @@
+FROM python:3.13-slim
+
+# 1. Install system binaries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    ca-certificates \
+    libpangocairo-1.0-0 \
+    fonts-noto-core \
+    fonts-noto-unhinted \
+    libmagic1 \
+ && rm -rf /var/lib/apt/lists/*
+
+# 2. Grab 'uv' for fast Python package installation
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /workspace
+
+# 3. Install centralized Python dependencies
+COPY images/pyproject.toml .
+RUN uv pip install --system -r pyproject.toml
+
+CMD ["sleep", "infinity"]
