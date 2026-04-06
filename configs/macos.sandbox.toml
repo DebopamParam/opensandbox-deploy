@@ -1,0 +1,19 @@
+# OpenSandbox — macOS local dev (OrbStack / Docker Desktop, runc)
+# Templated by start-server.sh from .env values
+
+[server]
+host = "0.0.0.0"
+port = {{SANDBOX_PORT}}
+log_level = "{{SANDBOX_LOG_LEVEL}}"
+api_key = "{{SANDBOX_API_KEY}}"
+
+[runtime]
+type = "docker"
+execd_image = "opensandbox/execd:v1.0.6"
+
+[docker]
+network_mode = "bridge"
+api_timeout = 300
+pids_limit = 512
+
+# No secure_runtime — plain runc for local dev
