@@ -464,3 +464,410 @@ except SandboxApiException as e:
 | `delete_directories([paths])` | Remove directories (`rm -rf`). |
 | `search(SearchEntry)` | Find files using glob patterns. |
 | `get_file_info([paths])` | Returns a dictionary mapping path to `EntryInfo`. |
+
+Here is the complete, final architectural pattern in a single Markdown file. It incorporates all of our iterations: Pydantic runtime validation, implicit working directory normalization, stateful shell sessions, and non-blocking background executions. 
+
+---
+
+
+## 14. Vendor-Agnostic Abstractions (Advanced)
+
+To prevent vendor lock-in and ensure your application can seamlessly switch between OpenSandbox, local Docker, or other remote execution environments, you can use a hardware-agnostic abstraction layer. 
+
+This implementation uses **Pydantic** for strict runtime configuration validation and the **Dependency Inversion Principle** to decouple your business logic from the specific SDK. It provides built-in path normalization, stateful shell sessions, and background task management.
+
+### 1. Core Interfaces (`core.py`)
+
+Defines the universal language for interacting with any sandbox provider.
+
+```python
+import abc
+import logging
+from typing import Any, Dict, Optional, Union
+from pydantic import BaseModel, Field, ConfigDict
+
+logger = logging.getLogger(__name__)
+
+class CommandResult(BaseModel):
+    """Represents the outcome of a command executed inside a sandbox."""
+    model_config = ConfigDict(frozen=True)
+
+    exit_code: int = Field(description="The shell exit code (0 usually indicates success).")
+    text: str = Field(description="Combined stdout/stderr output.")
+    
+    @property
+    def success(self) -> bool:
+        """Syntactic sugar for checking if the command succeeded."""
+        return self.exit_code == 0
+
+class ExecutionStatus(BaseModel):
+    """Represents the real-time status of a background execution."""
+    model_config = ConfigDict(frozen=True)
+
+    execution_id: str = Field(description="The unique identifier for the background task.")
+    is_running: bool = Field(description="True if the process is still active.")
+    exit_code: Optional[int] = Field(default=None, description="Populated only when the process has finished.")
+    
+    @property
+    def success(self) -> bool:
+        """True if the process finished and exited cleanly."""
+        return not self.is_running and self.exit_code == 0
+
+class SandboxConfig(BaseModel):
+    """Universal configuration for provisioning a sandbox."""
+    model_config = ConfigDict(frozen=True)
+
+    image: str = Field(description="Docker image URI (e.g., 'python:3.13-slim').")
+    
+    env: Dict[str, str] = Field(
+        default_factory=dict, 
+        description="Environment variables to inject."
+    )
+    
+    timeout_seconds: Optional[int] = Field(
+        default=600, 
+        ge=1, 
+        description="Auto-termination TTL in seconds."
+    )
+    
+    working_dir: str = Field(
+        default="/workspace", 
+        description="The base directory for all relative file paths and command executions."
+    )
+    
+    provider_kwargs: Dict[str, Any] = Field(
+        default_factory=dict, 
+        description="Vendor-specific configuration (e.g., domain, api_key)."
+    )
+
+class AbstractSession(abc.ABC):
+    """An active, stateful shell session inside a sandbox."""
+    
+    @abc.abstractmethod
+    async def run_command(self, cmd: str, timeout: Optional[int] = None) -> CommandResult:
+        pass
+
+    @abc.abstractmethod
+    async def close(self) -> None:
+        pass
+
+class AbstractSandbox(abc.ABC):
+    """Base interface for an active sandbox instance."""
+
+    # -- File & Sync Execution --
+    @abc.abstractmethod
+    async def run_command(self, cmd: str, timeout: Optional[int] = None) -> CommandResult:
+        pass
+
+    @abc.abstractmethod
+    async def write_file(self, path: str, content: Union[str, bytes]) -> None:
+        pass
+
+    @abc.abstractmethod
+    async def read_file(self, path: str) -> str:
+        pass
+        
+    # -- Background Execution --
+    @abc.abstractmethod
+    async def start_background(self, cmd: str) -> str:
+        pass
+
+    @abc.abstractmethod
+    async def get_command_status(self, execution_id: str) -> ExecutionStatus:
+        pass
+
+    @abc.abstractmethod
+    async def stop_background(self, execution_id: str) -> None:
+        pass
+
+    # -- Sessions & Lifecycle --
+    @abc.abstractmethod
+    async def create_session(self, working_dir: Optional[str] = None) -> AbstractSession:
+        pass
+
+    @abc.abstractmethod
+    async def kill(self) -> None:
+        pass
+
+class AbstractSandboxProvider(abc.ABC):
+    """Factory interface for provisioning sandboxes."""
+
+    @abc.abstractmethod
+    async def create_sandbox(self, config: SandboxConfig) -> AbstractSandbox:
+        pass
+```
+
+---
+
+### 2. Async Lifecycle Manager (`context.py`)
+
+A flexible context manager that handles provisioning on entry and mathematically guarantees environment teardown (both sessions and sandboxes) on exit, regardless of exceptions.
+
+```python
+from typing import AsyncGenerator, Literal, Tuple, Union, overload
+from contextlib import asynccontextmanager
+import logging
+
+from .core import AbstractSandbox, AbstractSandboxProvider, SandboxConfig, AbstractSession
+
+logger = logging.getLogger(__name__)
+
+# --- Type Hint Overloads for strict IDE support ---
+@overload
+def managed_sandbox(
+    provider: AbstractSandboxProvider, config: SandboxConfig, with_session: Literal[False] = False
+) -> asynccontextmanager[AsyncGenerator[AbstractSandbox, None]]: ...
+
+@overload
+def managed_sandbox(
+    provider: AbstractSandboxProvider, config: SandboxConfig, with_session: Literal[True]
+) -> asynccontextmanager[AsyncGenerator[Tuple[AbstractSandbox, AbstractSession], None]]: ...
+# ------------------------------------------------
+
+@asynccontextmanager
+async def managed_sandbox(
+    provider: AbstractSandboxProvider, 
+    config: SandboxConfig,
+    with_session: bool = True
+) -> AsyncGenerator[Union[AbstractSandbox, Tuple[AbstractSandbox, AbstractSession]], None]:
+    """
+    Spawns a sandbox and optionally a default stateful session.
+    Strictly guarantees termination of all spawned resources on exit.
+    """
+    sandbox = None
+    session = None
+    
+    try:
+        logger.info(f"Provisioning sandbox via {provider.__class__.__name__}...")
+        sandbox = await provider.create_sandbox(config)
+        logger.info("Sandbox provisioned successfully.")
+        
+        if with_session:
+            logger.info("Starting default stateful session...")
+            session = await sandbox.create_session()
+            yield sandbox, session
+        else:
+            yield sandbox
+            
+    except Exception as e:
+        logger.error(f"Error encountered during sandbox execution: {e}")
+        raise
+    finally:
+        # 1. Gracefully close the session first
+        if session is not None:
+            logger.info("Closing stateful session...")
+            try:
+                await session.close()
+            except Exception as session_err:
+                logger.error(f"Failed to cleanly close session: {session_err}")
+                
+        # 2. Forcefully kill the remote sandbox container
+        if sandbox is not None:
+            logger.info("Forcefully terminating sandbox...")
+            try:
+                await sandbox.kill()
+                logger.info("Sandbox terminated successfully.")
+            except Exception as kill_err:
+                logger.critical(f"Failed to cleanly terminate sandbox: {kill_err}")
+```
+
+---
+
+### 3. OpenSandbox Adapter (`providers/opensandbox.py`)
+
+The concrete implementation that maps our universal abstractions to the OpenSandbox SDK, handling relative path normalization and implicit directory creation.
+
+```python
+import posixpath
+from datetime import timedelta
+from typing import Union, Optional
+
+from opensandbox import Sandbox as OSSandbox
+from opensandbox.config import ConnectionConfig
+from opensandbox.models.execd import RunCommandOpts
+
+from ..core import (
+    AbstractSandbox, 
+    AbstractSandboxProvider, 
+    AbstractSession,
+    CommandResult, 
+    ExecutionStatus,
+    SandboxConfig
+)
+
+class OpenSandboxSession(AbstractSession):
+    def __init__(self, sandbox_instance: OSSandbox, session_id: str):
+        self._sandbox = sandbox_instance
+        self._session_id = session_id
+
+    async def run_command(self, cmd: str, timeout: Optional[int] = None) -> CommandResult:
+        kwargs = {}
+        if timeout:
+            kwargs["timeout"] = timedelta(seconds=timeout)
+            
+        result = await self._sandbox.commands.run_in_session(
+            self._session_id, 
+            cmd, 
+            **kwargs
+        )
+        return CommandResult(exit_code=result.exit_code, text=result.text)
+
+    async def close(self) -> None:
+        await self._sandbox.commands.delete_session(self._session_id)
+
+
+class OpenSandboxAdapter(AbstractSandbox):
+    def __init__(self, sandbox_instance: OSSandbox, working_dir: str):
+        self._sandbox = sandbox_instance
+        self._working_dir = working_dir
+
+    def _normalize_path(self, path: str) -> str:
+        """Converts relative paths to absolute paths based on the working directory."""
+        if posixpath.isabs(path):
+            return path
+        return posixpath.join(self._working_dir, path)
+
+    # -- File & Sync Execution --
+    async def run_command(self, cmd: str, timeout: Optional[int] = None) -> CommandResult:
+        opts = RunCommandOpts(working_directory=self._working_dir)
+        if timeout:
+            opts.timeout = timedelta(seconds=timeout)
+            
+        result = await self._sandbox.commands.run(cmd, opts=opts)
+        return CommandResult(exit_code=result.exit_code, text=result.text)
+
+    async def write_file(self, path: str, content: Union[str, bytes]) -> None:
+        abs_path = self._normalize_path(path)
+        parent_dir = posixpath.dirname(abs_path)
+        
+        # Implicitly ensure the parent directory exists
+        if parent_dir and parent_dir != "/":
+            await self._sandbox.commands.run(
+                f"mkdir -p {parent_dir}", 
+                opts=RunCommandOpts(working_directory="/")
+            )
+            
+        await self._sandbox.files.write_file(abs_path, content)
+
+    async def read_file(self, path: str) -> str:
+        abs_path = self._normalize_path(path)
+        return await self._sandbox.files.read_file(abs_path)
+
+    # -- Background Execution --
+    async def start_background(self, cmd: str) -> str:
+        opts = RunCommandOpts(
+            working_directory=self._working_dir,
+            background=True
+        )
+        result = await self._sandbox.commands.run(cmd, opts=opts)
+        return result.id
+
+    async def get_command_status(self, execution_id: str) -> ExecutionStatus:
+        status = await self._sandbox.commands.get_command_status(execution_id)
+        return ExecutionStatus(
+            execution_id=execution_id,
+            is_running=status.running,
+            exit_code=status.exit_code if not status.running else None 
+        )
+
+    async def stop_background(self, execution_id: str) -> None:
+        await self._sandbox.commands.interrupt(execution_id)
+
+    # -- Sessions & Lifecycle --
+    async def create_session(self, working_dir: Optional[str] = None) -> AbstractSession:
+        target_dir = working_dir if working_dir else self._working_dir
+        session_id = await self._sandbox.commands.create_session(
+            working_directory=target_dir
+        )
+        return OpenSandboxSession(self._sandbox, session_id)
+
+    async def kill(self) -> None:
+        await self._sandbox.kill()
+
+
+class OpenSandboxProvider(AbstractSandboxProvider):
+    async def create_sandbox(self, config: SandboxConfig) -> AbstractSandbox:
+        connection_config = ConnectionConfig(
+            domain=config.provider_kwargs.get("domain", "localhost:8080"),
+            api_key=config.provider_kwargs.get("api_key", ""),
+            use_server_proxy=config.provider_kwargs.get("use_server_proxy", False)
+        )
+        
+        timeout_td = timedelta(seconds=config.timeout_seconds) if config.timeout_seconds else None
+
+        os_sandbox = await OSSandbox.create(
+            image=config.image,
+            env=config.env,
+            timeout=timeout_td,
+            connection_config=connection_config
+        )
+
+        return OpenSandboxAdapter(os_sandbox, config.working_dir)
+```
+
+---
+
+### 4. Comprehensive Usage Example
+
+This demonstrates how client code leverages the abstraction for filesystem operations, stateful executions, and background polling—all without leaking infrastructure details.
+
+```python
+import asyncio
+from infrastructure.core import SandboxConfig
+from infrastructure.context import managed_sandbox
+from infrastructure.providers.opensandbox import OpenSandboxProvider
+
+async def main():
+    # 1. Instantiate the provider
+    provider = OpenSandboxProvider()
+
+    # 2. Define the validated configuration
+    config = SandboxConfig(
+        image="python:3.13-slim",
+        working_dir="/app/project", # Implicit target for all paths/commands
+        timeout_seconds=300,
+        provider_kwargs={
+            "domain": "api.sandbox.internal:8080",
+            "api_key": "your_api_key",
+        }
+    )
+
+    # 3. Enter the managed context (spawns sandbox & session automatically)
+    async with managed_sandbox(provider, config, with_session=True) as (sandbox, session):
+        
+        print("--- 1. File System & Sync Execution ---")
+        # Automatically runs `mkdir -p /app/project/src` before writing
+        await sandbox.write_file("src/hello.py", "import os; print(os.environ.get('MY_VAR', 'None'))")
+        
+        # Automatically executes inside /app/project
+        result = await sandbox.run_command("python src/hello.py")
+        print(f"Stateless output: {result.text.strip()}") # Output: None
+        
+        
+        print("\n--- 2. Stateful Session ---")
+        # State persists across commands in a session
+        await session.run_command("export MY_VAR='Hello from Session'")
+        session_result = await session.run_command("python src/hello.py")
+        print(f"Stateful output: {session_result.text.strip()}") # Output: Hello from Session
+        
+        
+        print("\n--- 3. Background Execution ---")
+        print("Dispatching heavy task...")
+        exec_id = await sandbox.start_background("sleep 3 && echo 'Task Complete'")
+        
+        # Do local work while the remote task processes
+        while True:
+            status = await sandbox.get_command_status(exec_id)
+            if not status.is_running:
+                break
+            print("Waiting for background task...")
+            await asyncio.sleep(1)
+            
+        print(f"Background task finished! Exit code: {status.exit_code}")
+
+    # Exiting the 'with' block automatically closes the session and kills the sandbox.
+    print("\nSandbox teardown complete.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
