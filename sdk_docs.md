@@ -813,9 +813,9 @@ This demonstrates how client code leverages the abstraction for filesystem opera
 
 ```python
 import asyncio
-from infrastructure.core import SandboxConfig
-from infrastructure.context import managed_sandbox
-from infrastructure.providers.opensandbox import OpenSandboxProvider
+from .core import SandboxConfig
+from context import managed_sandbox
+from .providers.opensandbox import OpenSandboxProvider
 
 async def main():
     # 1. Instantiate the provider
