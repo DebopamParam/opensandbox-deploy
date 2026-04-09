@@ -55,8 +55,10 @@ if ! command -v uv &>/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="$HOME/.local/bin:$PATH"
 fi
-# Only install the server component globally; the client SDKs are not needed here.
-uv pip install --system opensandbox-server
+
+# Install as a tool — isolated venv, CLI binary on PATH
+uv tool install opensandbox-server
+export PATH="$HOME/.local/bin:$PATH"
 
 echo "==> Building custom sandbox base image..."
 docker build -t opensandbox-base:latest -f images/Dockerfile.base .
