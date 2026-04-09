@@ -72,7 +72,7 @@ for f in env.example .env.example .env; do
 done
 
 echo "==> Pulling execd + egress images..."
-docker pull opensandbox/execd:v1.0.6
+docker pull opensandbox/execd:v1.0.10
 docker pull opensandbox/egress:v1.0.1
 
 echo ""
