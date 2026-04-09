@@ -55,7 +55,6 @@ if ! command -v uv &>/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="$HOME/.local/bin:$PATH"
 fi
-
 # Install as a tool — isolated venv, CLI binary on PATH
 uv tool install opensandbox-server
 export PATH="$HOME/.local/bin:$PATH"
@@ -63,9 +62,14 @@ export PATH="$HOME/.local/bin:$PATH"
 echo "==> Building custom sandbox base image..."
 docker build -t opensandbox-base:latest -f images/Dockerfile.base .
 
-echo "==> Updating .env.example to use the custom image..."
-sed -i.bak 's|SANDBOX_IMAGE=.*|SANDBOX_IMAGE=opensandbox-base:latest|' env.example
-rm -f env.example.bak
+echo "==> Updating config files to use the custom image..."
+for f in env.example .env.example .env; do
+  if [[ -f "$f" ]]; then
+    sed -i.bak "s|SANDBOX_IMAGE=.*|SANDBOX_IMAGE=opensandbox-base:latest|" "$f"
+    rm -f "${f}.bak"
+    echo "    Updated $f"
+  fi
+done
 
 echo "==> Pulling execd + egress images..."
 docker pull opensandbox/execd:v1.0.6
