@@ -2,6 +2,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Ensure uv-tool-installed binaries are on PATH
+export PATH="$HOME/.local/bin:$PATH"
+
 ENV=${1:-}
 if [[ -z "$ENV" ]]; then
   echo "Usage: ./scripts/start-server.sh <macos|gcp>"
@@ -39,7 +42,7 @@ if [[ "$SANDBOX_IMAGE" == *"/"* ]] || [[ "$SANDBOX_IMAGE" == *":"* && "$SANDBOX_
   fi
 fi
 
-# Use project-local venv if present, else system
+# Use project-local venv if present, else system/tool-installed
 if [[ -x ".venv/bin/opensandbox-server" ]]; then
   SERVER=".venv/bin/opensandbox-server"
 else
