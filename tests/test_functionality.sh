@@ -1,5 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
+cd "$(dirname "$0")/.."
 PRESETS_FILE="presets.json"
 SKIP_PROMPTS=false
 

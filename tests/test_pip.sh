@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test_pip.sh — build the base image, start the server, run pip install tests, tear down.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 export PATH="$HOME/.local/bin:$PATH"
 

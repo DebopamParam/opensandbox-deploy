@@ -22,7 +22,7 @@ Usage:
         --protocol https \\
         --api-key $OPEN_SANDBOX_API_KEY
 
-    # On macOS / Docker bridge networking
+    # With Docker bridge networking
     python test_opensandbox_server.py --use-server-proxy
 
     # Skip slow tests
@@ -335,8 +335,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--use-server-proxy",
         action="store_true",
-        help="Route execd traffic through the server. Required on macOS / "
-             "Docker bridge networking.",
+        help="Route execd traffic through the server. Required with Docker bridge networking.",
     )
     p.add_argument(
         "--image",
@@ -449,7 +448,7 @@ async def amain(args: argparse.Namespace) -> int:
         print()
         print(f"{C.DIM}Hints:{C.RESET}")
         print(f"  • Is the server running and listening on {args.domain}?")
-        print(f"  • If on macOS or Docker-for-Desktop, try {C.BOLD}--use-server-proxy{C.RESET}.")
+        print(f"  • If using Docker bridge networking, try {C.BOLD}--use-server-proxy{C.RESET}.")
         print(f"  • Check that {C.BOLD}--protocol{C.RESET} matches the server (http vs https).")
         return 1
 

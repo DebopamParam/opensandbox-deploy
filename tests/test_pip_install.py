@@ -12,7 +12,7 @@ Usage:
     # Against a remote server
     python tests/test_pip_install.py --domain 35.207.234.60:8080 --api-key <key>
 
-    # macOS / Docker bridge (requires server proxy)
+    # With Docker bridge networking
     python tests/test_pip_install.py --use-server-proxy
 
 Exit code is 0 if all tests pass, 1 otherwise.
@@ -229,7 +229,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--protocol", choices=("http", "https"), default="http")
     p.add_argument("--api-key", default=os.environ.get("OPEN_SANDBOX_API_KEY", ""))
     p.add_argument("--use-server-proxy", action="store_true",
-                   help="Route execd traffic through the server (required on macOS).")
+                   help="Route execd traffic through the server (required with Docker bridge networking).")
     p.add_argument("--image", default=os.environ.get("SANDBOX_IMAGE", "opensandbox-base:latest"),
                    help="Sandbox image to use (default: opensandbox-base:latest).")
     p.add_argument("--ready-timeout", type=int, default=120,
@@ -306,7 +306,7 @@ async def amain(args) -> int:
             traceback.print_exc()
         print(f"\n{C.DIM}Hints:{C.RESET}")
         print(f"  • Is the server running on {args.domain}?")
-        print(f"  • On macOS / Docker bridge try {C.BOLD}--use-server-proxy{C.RESET}.")
+        print(f"  • If using Docker bridge networking, try {C.BOLD}--use-server-proxy{C.RESET}.")
         return 1
 
     print(f"  {C.GREEN}✓{C.RESET} sandbox {C.DIM}{sandbox.id}{C.RESET} ready "

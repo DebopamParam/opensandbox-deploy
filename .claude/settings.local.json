@@ -9,7 +9,8 @@
       "Bash(chmod +x *)",
       "Bash(.venv/bin/python *)",
       "Bash(rtk curl *)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(rtk grep *)"
     ]
   }
 }

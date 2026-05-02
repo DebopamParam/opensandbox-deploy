@@ -53,7 +53,7 @@ async def main():
     config = ConnectionConfig(
         domain="localhost:8080",
         api_key="your-api-key",
-        use_server_proxy=True,  # Required on macOS / Docker bridge
+        use_server_proxy=True,  # Required with Docker bridge networking
     )
 
     # Context manager automatically calls sandbox.close() (local cleanup)
@@ -85,7 +85,7 @@ asyncio.run(main())
 | `domain` | `str` | `None` | `OPEN_SANDBOX_DOMAIN` | Server host:port (e.g., `localhost:8080`) |
 | `protocol` | `str` | `"http"` | — | `http` or `https` |
 | `request_timeout` | `timedelta` | 30s | — | Timeout for API requests |
-| `use_server_proxy` | `bool` | `False` | — | Route execd traffic through the server (required on macOS with bridge networking) |
+| `use_server_proxy` | `bool` | `False` | — | Route execd traffic through the server (required with Docker bridge networking) |
 
 ---
 
