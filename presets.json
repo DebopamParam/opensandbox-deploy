@@ -1,0 +1,12 @@
+{
+    "DOMAIN": "35.207.234.60:8080",
+    "PROTOCOL": "http",
+    "API_KEY": "change-me-to-something-secret",
+    "USE_PROXY": "y",
+    "IMAGE": "opensandbox-base:latest",
+    "READY_TIMEOUT": "60",
+    "SKIP_TESTS": "",
+    "ONLY_TESTS": "",
+    "VERBOSE": "N",
+    "NO_COLOR": "N"
+}

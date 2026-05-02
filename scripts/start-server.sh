@@ -49,5 +49,9 @@ else
   SERVER="opensandbox-server"
 fi
 
+if [[ -n "${SANDBOX_EGRESS_RULES:-}" ]]; then
+  export OPENSANDBOX_EGRESS_RULES="$SANDBOX_EGRESS_RULES"
+fi
+
 echo "Starting opensandbox-server on :${SANDBOX_PORT:-8080} ..."
 exec "$SERVER"
