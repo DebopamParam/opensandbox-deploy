@@ -29,9 +29,11 @@ SANDBOX_IMAGE="${SANDBOX_IMAGE:-opensandbox-base:latest}"
 OS="$(uname -s)"
 if [[ "$OS" == "Darwin" ]]; then
     ENV_NAME="macos"
+    CONFIG_TEMPLATE="configs/macos.sandbox.toml"
     USE_PROXY_FLAG="--use-server-proxy"
 else
     ENV_NAME="gcp"
+    CONFIG_TEMPLATE="configs/gcp-gvisor.sandbox.toml"
     USE_PROXY_FLAG=""
 fi
 info "Environment: ${ENV_NAME} (${OS})"
@@ -61,7 +63,7 @@ echo
 
 # ─── 5. Render server config ──────────────────────────────────────────────────
 RENDERED="$HOME/.sandbox.toml"
-TEMPLATE="configs/${ENV_NAME}.sandbox.toml"
+TEMPLATE="$CONFIG_TEMPLATE"
 [[ -f "$TEMPLATE" ]] || die "Config template not found: ${TEMPLATE}"
 
 sed \
