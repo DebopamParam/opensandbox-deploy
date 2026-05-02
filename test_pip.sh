@@ -30,12 +30,11 @@ OS="$(uname -s)"
 if [[ "$OS" == "Darwin" ]]; then
     ENV_NAME="macos"
     CONFIG_TEMPLATE="configs/macos.sandbox.toml"
-    USE_PROXY_FLAG="--use-server-proxy"
 else
     ENV_NAME="gcp"
     CONFIG_TEMPLATE="configs/gcp-gvisor.sandbox.toml"
-    USE_PROXY_FLAG=""
 fi
+USE_PROXY_FLAG="--use-server-proxy"
 info "Environment: ${ENV_NAME} (${OS})"
 
 # ─── 3. Find the server binary ────────────────────────────────────────────────

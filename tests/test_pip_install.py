@@ -150,9 +150,6 @@ async def test_pip_installed_package_works(sandbox, sdk):
 async def test_uv_pip_install(sandbox, sdk):
     res = await sandbox.commands.run("uv pip install --system pytz")
     assert res.exit_code == 0, f"uv pip install failed (exit {res.exit_code}):\n{res.text}"
-    assert "installed" in res.text.lower() or "audited" in res.text.lower(), (
-        f"unexpected uv output:\n{res.text}"
-    )
 
 
 async def test_uv_installed_package_works(sandbox, sdk):

@@ -5,7 +5,11 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "mcp__claude_ai_deepwiki__ask_question"
+      "mcp__claude_ai_deepwiki__ask_question",
+      "Bash(chmod +x *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(rtk curl *)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }
