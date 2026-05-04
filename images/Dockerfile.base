@@ -3,7 +3,7 @@ FROM python:3.13-slim
 # Allow pip install without --break-system-packages (PEP 668)
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
-# 1. Install system binaries
+# 1. Install system binaries (runtime only)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ffmpeg \
@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-noto-core \
     fonts-noto-unhinted \
     libmagic1 \
+    libgl1 \
+    libegl1 \
  && rm -rf /var/lib/apt/lists/*
 
 # 2. Grab 'uv' for fast Python package installation
@@ -20,8 +22,22 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /workspace
 
-# 3. Install centralized Python dependencies
+# 3. Install centralized Python dependencies.
+# pycairo (manim dep) ships only an sdist on PyPI, so cairo/pango dev
+# headers and a C toolchain are required during install. They are
+# purged in the same layer to keep the runtime image lean.
 COPY images/pyproject.toml .
-RUN uv pip install --system -r pyproject.toml
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        pkg-config \
+        libcairo2-dev \
+        libpango1.0-dev \
+ && uv pip install --system -r pyproject.toml \
+ && apt-get purge -y --auto-remove \
+        build-essential \
+        pkg-config \
+        libcairo2-dev \
+        libpango1.0-dev \
+ && rm -rf /var/lib/apt/lists/*
 
 CMD ["sleep", "infinity"]
