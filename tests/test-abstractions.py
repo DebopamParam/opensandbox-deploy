@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 import posixpath
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import timedelta
 from typing import Any, AsyncGenerator, Dict, Literal, Optional, Tuple, Union, overload
 
@@ -94,12 +94,12 @@ class AbstractSandboxProvider(abc.ABC):
 @overload
 def managed_sandbox(
     provider: AbstractSandboxProvider, config: SandboxConfig, with_session: Literal[False] = False
-) -> AsyncGenerator[AbstractSandbox, None]: ...
+) -> AbstractAsyncContextManager[AbstractSandbox]: ...
 
 @overload
 def managed_sandbox(
     provider: AbstractSandboxProvider, config: SandboxConfig, with_session: Literal[True]
-) -> AsyncGenerator[Tuple[AbstractSandbox, AbstractSession], None]: ...
+) -> AbstractAsyncContextManager[Tuple[AbstractSandbox, AbstractSession]]: ...
 # ------------------------------------------------
 
 @asynccontextmanager
@@ -144,7 +144,7 @@ class OpenSandboxSession(AbstractSession):
         kwargs = {}
         if timeout: kwargs["timeout"] = timedelta(seconds=timeout)
         result = await self._sandbox.commands.run_in_session(self._session_id, cmd, **kwargs)
-        return CommandResult(exit_code=result.exit_code, text=result.text)
+        return CommandResult(exit_code=result.exit_code if result.exit_code is not None else 0, text=result.text)
 
     async def close(self) -> None:
         await self._sandbox.commands.delete_session(self._session_id)
@@ -162,7 +162,7 @@ class OpenSandboxAdapter(AbstractSandbox):
         opts = RunCommandOpts(working_directory=self._working_dir)
         if timeout: opts.timeout = timedelta(seconds=timeout)
         result = await self._sandbox.commands.run(cmd, opts=opts)
-        return CommandResult(exit_code=result.exit_code, text=result.text)
+        return CommandResult(exit_code=result.exit_code if result.exit_code is not None else 0, text=result.text)
 
     async def write_file(self, path: str, content: Union[str, bytes]) -> None:
         abs_path = self._normalize_path(path)
@@ -178,13 +178,15 @@ class OpenSandboxAdapter(AbstractSandbox):
     async def start_background(self, cmd: str) -> str:
         opts = RunCommandOpts(working_directory=self._working_dir, background=True)
         result = await self._sandbox.commands.run(cmd, opts=opts)
+        if result.id is None:
+            raise RuntimeError("Background command did not return an execution id")
         return result.id
 
     async def get_command_status(self, execution_id: str) -> ExecutionStatus:
         status = await self._sandbox.commands.get_command_status(execution_id)
         return ExecutionStatus(
             execution_id=execution_id,
-            is_running=status.running,
+            is_running=bool(status.running),
             exit_code=status.exit_code if not status.running else None 
         )
 
